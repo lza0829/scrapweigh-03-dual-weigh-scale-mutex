@@ -125,3 +125,13 @@ td button + button { margin-left: 0.35rem; }
 .msg { margin: 0.5rem 0; color: var(--ok); }
 .err { margin: 0.5rem 0; color: var(--danger); }
 .muted { color: #6d6458; font-size: 0.86rem; }
+.json-box {
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid #d2c8b8;
+  background: #f4efe6;
+  font-size: 0.82rem;
+}
+td .row { margin: 0; gap: 0.25rem; }
+td .row button { padding: 0.3rem 0.55rem; }

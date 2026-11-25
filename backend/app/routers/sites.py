@@ -1,6 +1,6 @@
 from __future__ import annotations
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from app.db import db, rows_to_list, row_to_dict
 from app.services.common import audit
 
@@ -10,8 +10,13 @@ SITE_STATUS = ("营业中", "停收", "已注销")
 
 
 class SiteIn(BaseModel):
-    名称: str = Field(min_length=1)
-    地址: str = ""
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    名称: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("名称", "name", "site_name"),
+    )
+    地址: str = Field(default="", validation_alias=AliasChoices("地址", "address", "addr"))
 
 
 class StatusIn(BaseModel):
@@ -20,7 +25,7 @@ class StatusIn(BaseModel):
 
 def _site(conn, site_id: int):
     row = conn.execute(
-        "SELECT id AS 编号, name AS 名称, status AS 状态, address AS 地址 FROM sites WHERE id=?",
+        "SELECT id AS 编号, id AS id, name AS 名称, status AS 状态, address AS 地址 FROM sites WHERE id=?",
         (site_id,),
     ).fetchone()
     return row_to_dict(row)
@@ -30,7 +35,7 @@ def _site(conn, site_id: int):
 def list_sites():
     with db() as conn:
         return rows_to_list(conn.execute(
-            "SELECT id AS 编号, name AS 名称, status AS 状态, address AS 地址 FROM sites ORDER BY id"
+            "SELECT id AS 编号, id AS id, name AS 名称, status AS 状态, address AS 地址 FROM sites ORDER BY id"
         ).fetchall())
 
 

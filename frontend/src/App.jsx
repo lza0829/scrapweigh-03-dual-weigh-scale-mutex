@@ -12,10 +12,14 @@ import Shifts from './pages/Shifts'
 import Sites from './pages/Sites'
 import Settings from './pages/Settings'
 import Audit from './pages/Audit'
+import Seats from './pages/Seats'
+import Supplement from './pages/Supplement'
 
 const links = [
   ['/', '总览'],
   ['/过磅', '过磅'],
+  ['/席位牌', '席位牌'],
+  ['/补称', '补称'],
   ['/磅条', '磅条'],
   ['/定级', '定级'],
   ['/结价', '结价'],
@@ -48,6 +52,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/过磅" element={<Weigh />} />
+          <Route path="/席位牌" element={<Seats />} />
+          <Route path="/补称" element={<Supplement />} />
           <Route path="/磅条" element={<Tickets />} />
           <Route path="/定级" element={<Grade />} />
           <Route path="/结价" element={<Settle />} />

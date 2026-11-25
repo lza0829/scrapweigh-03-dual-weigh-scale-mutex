@@ -19,20 +19,33 @@ SELECT t.id AS 编号,
        t.tare_kg AS 皮重,
        t.deduct_kg AS 扣杂,
        t.net_kg AS 净重,
+       t.net_kg AS 扣杂后货重,
        t.grade_id AS 品级编号,
        g.category AS 品类,
        g.grade_name AS 品级,
        t.locked_price AS 锁价,
+       t.locked_price AS 牌价,
+       t.locked_price AS 牌价单价,
        t.amount AS 金额,
+       t.amount AS 结算金额,
+       t.amount AS 牌价金额,
        t.note AS 备注,
+       t.chain_no AS 串号,
+       t.receipt_no AS 回执号,
+       t.seat_card_id AS 席位牌编号,
+       seat.card_no AS 席位牌号,
        t.created_at AS 入站时间,
        t.settled_at AS 结价时间,
-       t.voided_at AS 销单时间
+       t.voided_at AS 销单时间,
+       sc.pinned_ticket_id AS 钉住磅条编号,
+       pt.serial AS 钉住磅条号
 FROM tickets t
 JOIN sites st ON st.id = t.site_id
 JOIN scales sc ON sc.id = t.scale_id
 JOIN shifts sh ON sh.id = t.shift_id
 LEFT JOIN grades g ON g.id = t.grade_id
+LEFT JOIN seat_cards seat ON seat.id = t.seat_card_id
+LEFT JOIN tickets pt ON pt.id = sc.pinned_ticket_id
 """
 
 
@@ -40,11 +53,12 @@ def now_str() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def audit(conn, kind: str, ref_id: int | None, action: str, note: str = "") -> None:
-    conn.execute(
+def audit(conn, kind: str, ref_id: int | None, action: str, note: str = "") -> int:
+    cur = conn.execute(
         "INSERT INTO audit_events(kind, ref_id, action, created_at, note) VALUES (?, ?, ?, ?, ?)",
         (kind, ref_id, action, now_str(), note),
     )
+    return int(cur.lastrowid)
 
 
 def get_setting(conn, key: str, default: str = "") -> str:
@@ -98,6 +112,11 @@ def require_ticket(conn, ticket_id: int):
 
 
 def occupy_scale(conn, scale_id: int) -> None:
+    """Legacy compare-and-set helper retained for compatibility.
+
+    Admission does not use this reject-latecomer path; the selected architecture
+    issues a queue seat card when the scale already has an open formal ticket.
+    """
     cur = conn.execute(
         "UPDATE scales SET status='占用' WHERE id=? AND status='空闲'",
         (scale_id,),
@@ -114,13 +133,49 @@ def occupy_scale(conn, scale_id: int) -> None:
     raise HTTPException(400, "地磅不可占用")
 
 
-def release_scale(conn, scale_id: int) -> None:
+def release_scale(conn, scale_id: int, ticket_id: int | None = None, reason: str = "终态释放") -> bool:
+    """Release a scale only when the database has no open formal ticket for it."""
     still = conn.execute(
         "SELECT COUNT(*) AS c FROM tickets WHERE scale_id=? AND status IN ('待定级','待结价')",
         (scale_id,),
     ).fetchone()["c"]
-    if still == 0:
+    if still:
+        return False
+
+    ended_at = now_str()
+    if ticket_id is not None:
         conn.execute(
-            "UPDATE scales SET status='空闲' WHERE id=? AND status='占用'",
-            (scale_id,),
+            """
+            UPDATE occupancy_segments
+            SET status='已释放', ended_at=?, end_reason=?
+            WHERE scale_id=? AND status='占用中' AND ticket_id=?
+            """,
+            (ended_at, reason, scale_id, ticket_id),
         )
+    # If the segment projection missed the ticket link, the open-count gate still
+    # proves the scale is free; close the unique active segment to avoid a leak.
+    conn.execute(
+        """
+        UPDATE occupancy_segments
+        SET status='已释放', ended_at=?, end_reason=?
+        WHERE scale_id=? AND status='占用中'
+        """,
+        (ended_at, reason, scale_id),
+    )
+    conn.execute(
+        """
+        UPDATE scales
+        SET pinned_ticket_id=NULL, pinned_at=NULL
+        WHERE id=?
+        """,
+        (scale_id,),
+    )
+    conn.execute(
+        """
+        UPDATE scales
+        SET status='空闲'
+        WHERE id=? AND status='占用'
+        """,
+        (scale_id,),
+    )
+    return True

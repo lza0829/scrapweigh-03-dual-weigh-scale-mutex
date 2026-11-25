@@ -1,6 +1,6 @@
 from __future__ import annotations
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from app.db import db, rows_to_list, row_to_dict
 from app.services.common import audit
 
@@ -13,9 +13,20 @@ FROM grades
 
 
 class GradeIn(BaseModel):
-    品类: str = Field(min_length=1)
-    品级名: str = Field(min_length=1)
-    单价: float = Field(gt=0)
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    品类: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("品类", "category", "category_name"),
+    )
+    品级名: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("品级名", "品级", "grade_name", "name"),
+    )
+    单价: float = Field(
+        gt=0,
+        validation_alias=AliasChoices("单价", "牌价", "unit_price", "price"),
+    )
 
 
 @router.get("/品级")

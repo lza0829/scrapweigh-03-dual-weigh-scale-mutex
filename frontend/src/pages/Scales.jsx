@@ -47,11 +47,13 @@ export default function Scales() {
       {msg && <div className="msg">{msg}</div>}
       {err && <div className="err">{err}</div>}
       <table>
-        <thead><tr><th>回收点</th><th>地磅</th><th>状态</th><th>备注</th><th>操作</th></tr></thead>
+        <thead><tr><th>回收点</th><th>地磅</th><th>状态</th><th>钉住磅条</th><th>备注</th><th>操作</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.编号}>
-              <td>{r.回收点}</td><td>{r.地磅}</td><td>{r.状态}</td><td>{r.备注 || '-'}</td>
+              <td>{r.回收点}</td><td>{r.地磅}</td><td>{r.状态}</td>
+              <td>{r.钉住磅条号 || '-'}</td>
+              <td>{r.备注 || '-'}</td>
               <td>
                 {r.状态 === '空闲' && <button type="button" onClick={() => setStatus(r.编号, '故障')}>标故障</button>}
                 {r.状态 === '故障' && <button type="button" className="secondary" onClick={() => setStatus(r.编号, '空闲')}>恢复空闲</button>}

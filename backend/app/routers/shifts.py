@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from app.db import db, rows_to_list, row_to_dict
 from app.services.common import audit, now_str
+from app.services.seat import begin_write, expire_due_cards
 
 router = APIRouter(tags=["班次"])
 
@@ -27,6 +28,7 @@ def list_shifts():
 @router.post("/班次")
 def create_shift(body: ShiftIn):
     with db() as conn:
+        begin_write(conn)
         open_one = conn.execute("SELECT id FROM shifts WHERE status='未落印'").fetchone()
         if open_one:
             raise HTTPException(400, "仍有未落印班次，先落印再开新班")
@@ -48,6 +50,8 @@ def create_shift(body: ShiftIn):
 @router.post("/班次/{shift_id}/落印")
 def stamp_shift(shift_id: int):
     with db() as conn:
+        begin_write(conn)
+        expire_due_cards(conn)
         shift = conn.execute("SELECT * FROM shifts WHERE id=?", (shift_id,)).fetchone()
         if not shift:
             raise HTTPException(404, "班次不存在")
@@ -62,6 +66,12 @@ def stamp_shift(shift_id: int):
         ).fetchone()["c"]
         if pending:
             raise HTTPException(400, f"仍有未结磅条 {pending}，禁止落印")
+        waiting_cards = conn.execute(
+            "SELECT COUNT(*) AS c FROM seat_cards WHERE shift_id=? AND status='候席'",
+            (shift_id,),
+        ).fetchone()["c"]
+        if waiting_cards:
+            raise HTTPException(409, f"仍有 {waiting_cards} 张候席席位牌未补落/作废，禁止落印")
         conn.execute(
             "UPDATE shifts SET status='已落印', stamped_at=? WHERE id=? AND status='未落印'",
             (now_str(), shift_id),
